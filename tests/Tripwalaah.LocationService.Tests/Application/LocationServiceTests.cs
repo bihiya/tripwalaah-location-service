@@ -25,6 +25,7 @@ public sealed class LocationServiceTests
 
         created.Name.Should().Be("Changi Airport");
         created.CountryCode.Should().Be("SG");
+        created.Id.Should().NotBeNullOrWhiteSpace();
 
         var fetched = await service.GetByIdAsync(created.Id);
         fetched.Should().NotBeNull();
@@ -51,13 +52,15 @@ public sealed class LocationServiceTests
     private sealed class InMemoryLocationRepository : ILocationRepository
     {
         private readonly List<Location> _locations = [];
+        private int _counter;
 
-        public Task<Location?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        public Task<Location?> GetByIdAsync(string id, CancellationToken cancellationToken = default) =>
             Task.FromResult(_locations.FirstOrDefault(x => x.Id == id));
 
         public Task<(IReadOnlyList<Location> Items, int TotalCount)> SearchAsync(
             string? query,
             string? countryCode,
+            string? city,
             LocationType? type,
             bool? isActive,
             int page,
@@ -84,14 +87,13 @@ public sealed class LocationServiceTests
 
         public Task AddAsync(Location location, CancellationToken cancellationToken = default)
         {
+            _counter++;
+            location.AssignId($"507f1f77bcf86cd79943{_counter:D4}");
             _locations.Add(location);
             return Task.CompletedTask;
         }
 
         public Task UpdateAsync(Location location, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
-
-        public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
     }
 }

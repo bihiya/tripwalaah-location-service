@@ -19,8 +19,9 @@ RUN dotnet publish src/Tripwalaah.LocationService.Api/Tripwalaah.LocationService
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
-ENV ASPNETCORE_URLS=http://+:8080
-EXPOSE 8080
+ENV ASPNETCORE_URLS=http://+:5000
+ENV PORT=5000
+EXPOSE 5000
 
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "Tripwalaah.LocationService.Api.dll"]

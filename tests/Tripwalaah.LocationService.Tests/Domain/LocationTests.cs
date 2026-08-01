@@ -17,14 +17,18 @@ public sealed class LocationTests
             75.7873,
             LocationType.City,
             "Rajasthan",
+            "Rajasthan",
             "Pink City",
             "Asia/Kolkata");
 
         location.Name.Should().Be("Jaipur");
         location.CountryCode.Should().Be("IN");
+        location.State.Should().Be("Rajasthan");
         location.Type.Should().Be(LocationType.City);
         location.IsActive.Should().BeTrue();
-        location.Id.Should().NotBeEmpty();
+        location.Coordinates.Latitude.Should().Be(26.9124);
+        location.Coordinates.Longitude.Should().Be(75.7873);
+        location.Coordinates.Type.Should().Be("Point");
     }
 
     [Theory]
@@ -61,6 +65,21 @@ public sealed class LocationTests
         location.Deactivate();
 
         location.IsActive.Should().BeFalse();
-        location.UpdatedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void AssignId_SetsMongoObjectId()
+    {
+        var location = Location.Create(
+            "Jaipur",
+            "Jaipur",
+            "India",
+            "IN",
+            26.9,
+            75.8,
+            LocationType.City);
+
+        location.AssignId("507f1f77bcf86cd799439011");
+        location.Id.Should().Be("507f1f77bcf86cd799439011");
     }
 }

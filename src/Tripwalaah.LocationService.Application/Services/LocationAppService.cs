@@ -6,8 +6,13 @@ namespace Tripwalaah.LocationService.Application.Services;
 
 public sealed class LocationAppService(ILocationRepository repository) : ILocationService
 {
-    public async Task<LocationResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<LocationResponse?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return null;
+        }
+
         var location = await repository.GetByIdAsync(id, cancellationToken);
         return location is null ? null : Map(location);
     }
@@ -22,6 +27,7 @@ public sealed class LocationAppService(ILocationRepository repository) : ILocati
         var (items, totalCount) = await repository.SearchAsync(
             request.Query,
             request.CountryCode,
+            request.City,
             request.Type,
             request.IsActive,
             page,
@@ -47,18 +53,18 @@ public sealed class LocationAppService(ILocationRepository repository) : ILocati
             request.Latitude,
             request.Longitude,
             request.Type,
+            request.State,
             request.Region,
             request.Description,
-            request.Timezone);
+            request.Timezone,
+            request.GooglePlaceId);
 
         await repository.AddAsync(location, cancellationToken);
-        await repository.SaveChangesAsync(cancellationToken);
-
         return Map(location);
     }
 
     public async Task<LocationResponse?> UpdateAsync(
-        Guid id,
+        string id,
         UpdateLocationRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -76,17 +82,17 @@ public sealed class LocationAppService(ILocationRepository repository) : ILocati
             request.Latitude,
             request.Longitude,
             request.Type,
+            request.State,
             request.Region,
             request.Description,
-            request.Timezone);
+            request.Timezone,
+            request.GooglePlaceId);
 
         await repository.UpdateAsync(location, cancellationToken);
-        await repository.SaveChangesAsync(cancellationToken);
-
         return Map(location);
     }
 
-    public async Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<bool> DeactivateAsync(string id, CancellationToken cancellationToken = default)
     {
         var location = await repository.GetByIdAsync(id, cancellationToken);
         if (location is null)
@@ -96,7 +102,6 @@ public sealed class LocationAppService(ILocationRepository repository) : ILocati
 
         location.Deactivate();
         await repository.UpdateAsync(location, cancellationToken);
-        await repository.SaveChangesAsync(cancellationToken);
         return true;
     }
 
@@ -105,14 +110,16 @@ public sealed class LocationAppService(ILocationRepository repository) : ILocati
             location.Id,
             location.Name,
             location.City,
+            location.State,
             location.Country,
             location.CountryCode,
             location.Region,
-            location.Latitude,
-            location.Longitude,
+            location.Coordinates.Latitude,
+            location.Coordinates.Longitude,
             location.Type,
             location.Description,
             location.Timezone,
+            location.GooglePlaceId,
             location.IsActive,
             location.CreatedAt,
             location.UpdatedAt);

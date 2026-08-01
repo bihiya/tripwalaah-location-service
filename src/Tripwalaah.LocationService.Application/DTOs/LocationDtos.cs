@@ -3,9 +3,10 @@ using Tripwalaah.LocationService.Domain.Entities;
 namespace Tripwalaah.LocationService.Application.DTOs;
 
 public sealed record LocationResponse(
-    Guid Id,
+    string Id,
     string Name,
     string City,
+    string? State,
     string Country,
     string CountryCode,
     string? Region,
@@ -14,9 +15,10 @@ public sealed record LocationResponse(
     LocationType Type,
     string? Description,
     string? Timezone,
+    string? GooglePlaceId,
     bool IsActive,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset? UpdatedAt);
+    DateTime CreatedAt,
+    DateTime UpdatedAt);
 
 public sealed record CreateLocationRequest(
     string Name,
@@ -26,9 +28,11 @@ public sealed record CreateLocationRequest(
     double Latitude,
     double Longitude,
     LocationType Type,
+    string? State = null,
     string? Region = null,
     string? Description = null,
-    string? Timezone = null);
+    string? Timezone = null,
+    string? GooglePlaceId = null);
 
 public sealed record UpdateLocationRequest(
     string Name,
@@ -38,13 +42,16 @@ public sealed record UpdateLocationRequest(
     double Latitude,
     double Longitude,
     LocationType Type,
+    string? State = null,
     string? Region = null,
     string? Description = null,
-    string? Timezone = null);
+    string? Timezone = null,
+    string? GooglePlaceId = null);
 
 public sealed record LocationSearchRequest(
     string? Query = null,
     string? CountryCode = null,
+    string? City = null,
     LocationType? Type = null,
     bool? IsActive = true,
     int Page = 1,

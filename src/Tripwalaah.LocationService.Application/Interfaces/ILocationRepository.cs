@@ -4,11 +4,12 @@ namespace Tripwalaah.LocationService.Application.Interfaces;
 
 public interface ILocationRepository
 {
-    Task<Location?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Location?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
 
     Task<(IReadOnlyList<Location> Items, int TotalCount)> SearchAsync(
         string? query,
         string? countryCode,
+        string? city,
         LocationType? type,
         bool? isActive,
         int page,
@@ -18,6 +19,4 @@ public interface ILocationRepository
     Task AddAsync(Location location, CancellationToken cancellationToken = default);
 
     Task UpdateAsync(Location location, CancellationToken cancellationToken = default);
-
-    Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

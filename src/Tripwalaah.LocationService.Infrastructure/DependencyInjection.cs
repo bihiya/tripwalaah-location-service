@@ -1,6 +1,7 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using MongoDB.Driver;
 using Tripwalaah.LocationService.Application.Interfaces;
 using Tripwalaah.LocationService.Infrastructure.Persistence;
 
@@ -12,26 +13,81 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var provider = configuration.GetValue<string>("Database:Provider") ?? "PostgreSQL";
-        var connectionString = configuration.GetConnectionString("LocationDb");
-
-        services.AddDbContext<LocationDbContext>(options =>
+        services.Configure<MongoDbSettings>(options =>
         {
-            if (string.Equals(provider, "InMemory", StringComparison.OrdinalIgnoreCase))
+            configuration.GetSection(MongoDbSettings.SectionName).Bind(options);
+
+            // Align with Tripwalaah Node env var names when present.
+            var mongoUri = configuration["MONGODB_URI"]
+                ?? configuration.GetConnectionString("MongoDb")
+                ?? options.ConnectionString;
+
+            options.ConnectionString = mongoUri;
+
+            if (int.TryParse(configuration["DB_MAX_POOL_SIZE"], out var maxPool))
             {
-                options.UseInMemoryDatabase(connectionString ?? "TripwalaahLocations");
+                options.MaxPoolSize = maxPool;
             }
-            else
+
+            if (int.TryParse(configuration["DB_MIN_POOL_SIZE"], out var minPool))
             {
-                options.UseNpgsql(
-                    connectionString
-                    ?? "Host=localhost;Port=5432;Database=tripwalaah_locations;Username=postgres;Password=postgres");
+                options.MinPoolSize = minPool;
+            }
+
+            if (int.TryParse(configuration["DB_CONNECT_TIMEOUT"], out var connectTimeout))
+            {
+                options.ConnectTimeoutMs = connectTimeout;
+            }
+
+            if (int.TryParse(configuration["DB_SOCKET_TIMEOUT"], out var socketTimeout))
+            {
+                options.SocketTimeoutMs = socketTimeout;
+            }
+
+            if (string.IsNullOrWhiteSpace(options.DatabaseName))
+            {
+                options.DatabaseName = MongoUrl.Create(options.ConnectionString).DatabaseName
+                    ?? "tripwalaah";
             }
         });
 
-        services.AddScoped<ILocationRepository, LocationRepository>();
-        services.AddHostedService<LocationDbInitializer>();
-        services.AddHealthChecks().AddDbContextCheck<LocationDbContext>("database");
+        services.AddSingleton<IMongoClient>(sp =>
+        {
+            var settings = sp.GetRequiredService<IOptions<MongoDbSettings>>().Value;
+            var mongoUrl = MongoUrl.Create(settings.ConnectionString);
+            var clientSettings = MongoClientSettings.FromUrl(mongoUrl);
+            clientSettings.MaxConnectionPoolSize = settings.MaxPoolSize;
+            clientSettings.MinConnectionPoolSize = settings.MinPoolSize;
+            clientSettings.ConnectTimeout = TimeSpan.FromMilliseconds(settings.ConnectTimeoutMs);
+            clientSettings.SocketTimeout = TimeSpan.FromMilliseconds(settings.SocketTimeoutMs);
+            return new MongoClient(clientSettings);
+        });
+
+        services.AddSingleton(sp =>
+        {
+            var settings = sp.GetRequiredService<IOptions<MongoDbSettings>>().Value;
+            var client = sp.GetRequiredService<IMongoClient>();
+            var databaseName = settings.DatabaseName;
+            if (string.IsNullOrWhiteSpace(databaseName))
+            {
+                databaseName = MongoUrl.Create(settings.ConnectionString).DatabaseName ?? "tripwalaah";
+            }
+
+            return client.GetDatabase(databaseName);
+        });
+
+        services.AddSingleton(sp =>
+        {
+            var settings = sp.GetRequiredService<IOptions<MongoDbSettings>>().Value;
+            var database = sp.GetRequiredService<IMongoDatabase>();
+            return database.GetCollection<LocationDocument>(settings.LocationsCollectionName);
+        });
+
+        services.AddScoped<ILocationRepository, LocationMongoRepository>();
+        services.AddHostedService<LocationSeedHostedService>();
+
+        services.AddHealthChecks()
+            .AddMongoDb(sp => sp.GetRequiredService<IMongoClient>(), name: "mongodb");
 
         return services;
     }

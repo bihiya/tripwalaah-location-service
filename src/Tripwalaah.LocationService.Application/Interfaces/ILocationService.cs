@@ -4,7 +4,7 @@ namespace Tripwalaah.LocationService.Application.Interfaces;
 
 public interface ILocationService
 {
-    Task<LocationResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<LocationResponse?> GetByIdAsync(string id, CancellationToken cancellationToken = default);
 
     Task<PagedResult<LocationResponse>> SearchAsync(
         LocationSearchRequest request,
@@ -15,9 +15,9 @@ public interface ILocationService
         CancellationToken cancellationToken = default);
 
     Task<LocationResponse?> UpdateAsync(
-        Guid id,
+        string id,
         UpdateLocationRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<bool> DeactivateAsync(string id, CancellationToken cancellationToken = default);
 }

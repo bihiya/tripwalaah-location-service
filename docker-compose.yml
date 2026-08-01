@@ -2,30 +2,34 @@ services:
   location-api:
     build: .
     ports:
-      - "8080:8080"
+      - "5000:5000"
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      Database__Provider: PostgreSQL
-      ConnectionStrings__LocationDb: Host=postgres;Port=5432;Database=tripwalaah_locations;Username=postgres;Password=postgres
+      PORT: 5000
+      API_PREFIX: /api
+      APP_NAME: Tripwalaah
+      MONGODB_URI: mongodb://mongo:27017/tripwalaah
+      DB_MAX_POOL_SIZE: 10
+      DB_MIN_POOL_SIZE: 2
+      DB_CONNECT_TIMEOUT: 30000
+      DB_SOCKET_TIMEOUT: 45000
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000
+      FRONTEND_URL: http://localhost:5173
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
 
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: tripwalaah_locations
+  mongo:
+    image: mongo:7
     ports:
-      - "5432:5432"
+      - "27017:27017"
     volumes:
-      - location_pgdata:/var/lib/postgresql/data
+      - location_mongo_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d tripwalaah_locations"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  location_pgdata:
+  location_mongo_data:
