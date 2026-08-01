@@ -22,21 +22,38 @@ commands live in `README.md`; only the non-obvious, environment-specific notes a
   ```
   Run it in a background/tmux session (`/data/db` already exists and is writable). Verify with
   `mongosh --quiet --eval "db.adminCommand('ping')"`.
-- `GET /health` reports `Healthy` only when MongoDB is reachable, so it doubles as a DB connectivity
-  check.
+- `GET /health` reports dependency health (Mongo/Redis when enabled).
 - On first startup in Development the API auto-seeds sample locations into `tripwalaah.locations`
   when the collection is empty, and creates geo/text indexes — so search works immediately.
+
+### Redis + Kafka (live locations)
+
+- Live GPS updates are saved to Redis (`REDIS_URL`, default `redis://localhost:6379/0`) and published
+  to Kafka (`KAFKA_BOOTSTRAP_SERVERS`, default `localhost:9092`).
+- If Redis/Kafka are not running locally, either start them via `docker compose up redis kafka -d`
+  or disable for a Mongo-only run:
+  ```bash
+  REDIS_ENABLED=false KAFKA_ENABLED=false dotnet run --project src/Tripwalaah.LocationService.Api --launch-profile http
+  ```
+- Kafka initializer creates topics `tripwalaah.trip.live-location` and `tripwalaah.trip.events` when
+  brokers are reachable; failures are logged as warnings and do not crash the API.
+
+### SignalR
+
+- Hub endpoint: `/hubs/trip`
+- Client methods: `JoinTrip`, `LeaveTrip`, `UpdateLocation`, `GetPresence`
+- Live update path: SignalR broadcast → Redis save → Kafka publish
 
 ### Running the API
 
 - `dotnet run --project src/Tripwalaah.LocationService.Api --launch-profile http` serves on
-  `http://localhost:5000` (the `http` launch profile sets `MONGODB_URI=mongodb://localhost:27017/tripwalaah`).
+  `http://localhost:5000` (the `http` launch profile sets Mongo/Redis/Kafka defaults).
   You do not need a `.env` file for local dev; `launchSettings.json` provides the defaults.
 
 ### Tests & lint
 
-- `dotnet test Tripwalaah.LocationService.slnx` does **not** require MongoDB — the unit/API tests use
-  an in-memory fake `ILocationRepository`, so they run without any running service.
+- `dotnet test Tripwalaah.LocationService.slnx` does **not** require MongoDB/Redis/Kafka — API tests
+  disable Redis/Kafka and use fake repositories/caches.
 - There is no dedicated linter; `dotnet format Tripwalaah.LocationService.slnx --verify-no-changes`
   is used as the formatting/lint gate.
 

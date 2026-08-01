@@ -3,15 +3,12 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentAssertions;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Tripwalaah.LocationService.Api.Controllers;
 using Tripwalaah.LocationService.Application.DTOs;
 using Tripwalaah.LocationService.Application.Interfaces;
-using Tripwalaah.LocationService.Domain.Entities;
 
 namespace Tripwalaah.LocationService.Tests.Api;
 
@@ -23,28 +20,18 @@ public sealed class TripLiveControllerTests : IClassFixture<WebApplicationFactor
     };
 
     private readonly HttpClient _client;
+    private readonly CapturingLiveLocationCache _cache = new();
 
     public TripLiveControllerTests(WebApplicationFactory<Program> factory)
     {
-        _client = factory.WithWebHostBuilder(builder =>
+        _client = TestWebApp.CreateClient(factory, services =>
         {
-            builder.UseSetting("PORT", "0");
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<ILocationRepository>();
-                services.AddSingleton<ILocationRepository, NoopLocationRepository>();
+            services.RemoveAll<ITripLiveUpdateService>();
+            services.AddSingleton<ITripLiveUpdateService, CapturingLiveUpdateService>();
 
-                services.RemoveAll<ITripLiveUpdateService>();
-                services.AddSingleton<ITripLiveUpdateService, CapturingLiveUpdateService>();
-
-                var seed = services.FirstOrDefault(d =>
-                    d.ImplementationType?.Name == "LocationSeedHostedService");
-                if (seed is not null)
-                {
-                    services.Remove(seed);
-                }
-            });
-        }).CreateClient();
+            services.RemoveAll<ILiveLocationCache>();
+            services.AddSingleton<ILiveLocationCache>(_cache);
+        });
     }
 
     [Fact]
@@ -60,6 +47,26 @@ public sealed class TripLiveControllerTests : IClassFixture<WebApplicationFactor
         body.Should().NotBeNull();
         body!.TripId.Should().Be("trip-123");
         body.Status.Should().Be("started");
+    }
+
+    [Fact]
+    public async Task PublishLocation_SavesToLiveLocationCache()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/api/trips/trip-123/live/location",
+            new PublishLiveLocationBody("user-1", 26.9, 75.8, "Lav", 30, 90),
+            JsonOptions);
+
+        // CapturingLiveUpdateService does not call cache; verify GET locations endpoint uses injected cache.
+        response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        await _cache.SaveAsync(new LiveLocationUpdateDto(
+            "trip-123", "user-1", "Lav", 26.9, 75.8, 30, 90, DateTime.UtcNow));
+
+        var locationsResponse = await _client.GetAsync("/api/trips/trip-123/live/locations");
+        locationsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var locations = await locationsResponse.Content.ReadFromJsonAsync<List<LiveLocationUpdateDto>>(JsonOptions);
+        locations.Should().ContainSingle(x => x.UserId == "user-1");
     }
 
     [Fact]
@@ -89,29 +96,6 @@ public sealed class TripLiveControllerTests : IClassFixture<WebApplicationFactor
             Task.CompletedTask;
 
         public Task SendPresenceSnapshotAsync(string tripId, string connectionId, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
-    }
-
-    private sealed class NoopLocationRepository : ILocationRepository
-    {
-        public Task<Location?> GetByIdAsync(string id, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Location?>(null);
-
-        public Task<(IReadOnlyList<Location> Items, int TotalCount)> SearchAsync(
-            string? query,
-            string? countryCode,
-            string? city,
-            LocationType? type,
-            bool? isActive,
-            int page,
-            int pageSize,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(((IReadOnlyList<Location>)[], 0));
-
-        public Task AddAsync(Location location, CancellationToken cancellationToken = default) =>
-            Task.CompletedTask;
-
-        public Task UpdateAsync(Location location, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
     }
 }

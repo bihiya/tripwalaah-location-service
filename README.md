@@ -13,7 +13,7 @@ Controllers / SignalR Hub  →  Services  →  Repositories / Presence Store  �
 | `Api` | Controllers, `TripHub` (SignalR), CORS, OpenAPI |
 | `Application` | DTOs + location/live-update contracts |
 | `Domain` | `Location` entity + GeoJSON point |
-| `Infrastructure` | MongoDB + in-memory trip presence store |
+| `Infrastructure` | MongoDB, Redis live cache, Kafka producer/consumer |
 
 ## MongoDB document shape
 
@@ -55,14 +55,47 @@ Prefix: `/api` (same style as Tripwalaah Node API)
 | `DELETE` | `/api/locations/{id}` | Soft-delete (deactivate) |
 | `GET` | `/health` | Health check |
 | `GET` | `/api/trips/{tripId}/live/presence` | Connected members snapshot |
-| `POST` | `/api/trips/{tripId}/live/status` | Broadcast trip status via SignalR |
-| `POST` | `/api/trips/{tripId}/live/location` | Broadcast location via SignalR (server proxy) |
+| `GET` | `/api/trips/{tripId}/live/locations` | Live locations from Redis |
+| `POST` | `/api/trips/{tripId}/live/status` | Broadcast trip status via SignalR + Kafka |
+| `POST` | `/api/trips/{tripId}/live/location` | Broadcast location (SignalR + Redis + Kafka) |
+
+## Redis live locations
+
+Every `UpdateLocation` / live location broadcast is saved to Redis:
+
+| Key | Purpose |
+|-----|---------|
+| `tripwalaah:live:{tripId}:{userId}` | Latest location JSON (TTL, default 900s) |
+| `tripwalaah:live:trip:{tripId}` | Hash of all members’ latest locations |
+
+Uses the same `REDIS_URL` style as Tripwalaah Node (`redis://localhost:6379/0`).
+
+## Kafka
+
+Initialized on startup (`KafkaInitializerHostedService`):
+- validates broker connectivity
+- ensures topics exist:
+  - `tripwalaah.trip.live-location`
+  - `tripwalaah.trip.events`
+
+Publishes envelopes:
+
+```json
+{
+  "eventType": "location.updated",
+  "occurredAt": "...",
+  "source": "tripwalaah-location-service",
+  "data": { "...live location..." }
+}
+```
+
+Optional consumer: set `KAFKA_ENABLE_CONSUMER=true`.
 
 ## SignalR live trip updates
 
 Hub URL: `http://localhost:5000/hubs/trip`
 
-Use this so users in the same trip get live location + membership updates.
+Flow for live GPS: **SignalR broadcast → Redis save → Kafka publish**.
 
 ### Hub methods (client → server)
 
@@ -159,6 +192,10 @@ Important keys:
 | `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins (required for SignalR browser clients) |
 | `API_PREFIX` | `/api` |
 | `SIGNALR_ENABLED` | Feature flag marker (`true` by default in docs) |
+| `REDIS_URL` | Redis connection (`redis://localhost:6379/0`) |
+| `REDIS_ENABLED` | Enable Redis live-location cache |
+| `KAFKA_BOOTSTRAP_SERVERS` | Kafka brokers (`localhost:9092`) |
+| `KAFKA_ENABLED` | Enable Kafka producer + initializer |
 
 Do **not** commit real secrets (Atlas passwords, JWT keys, Twilio, OpenAI, etc.).
 
@@ -175,8 +212,10 @@ dotnet run --project src/Tripwalaah.LocationService.Api --launch-profile http
 
 ```bash
 docker compose up --build
-# API: http://localhost:5000
+# API:   http://localhost:5000
 # Mongo: mongodb://localhost:27017/tripwalaah
+# Redis: redis://localhost:6379/0
+# Kafka: localhost:9092
 ```
 
 ## Tests

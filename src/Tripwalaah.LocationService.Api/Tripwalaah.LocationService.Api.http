@@ -20,7 +20,7 @@ Content-Type: application/json
   "triggeredByUserId": "user-1"
 }
 
-### Broadcast live location (SignalR server proxy)
+### Broadcast live location (SignalR + Redis + Kafka)
 POST {{host}}/api/trips/{{tripId}}/live/location
 Content-Type: application/json
 
@@ -32,6 +32,9 @@ Content-Type: application/json
   "speedKmh": 40,
   "heading": 180
 }
+
+### Live locations from Redis
+GET {{host}}/api/trips/{{tripId}}/live/locations
 
 ### Search locations
 GET {{host}}/api/locations?countryCode=IN
