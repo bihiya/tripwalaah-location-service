@@ -5,15 +5,15 @@
 ## Architecture
 
 ```text
-Controllers  →  Services  →  Repositories  →  MongoDB (tripwalaah.locations)
+Controllers / SignalR Hub  →  Services  →  Repositories / Presence Store  →  MongoDB
 ```
 
 | Project | Responsibility |
 |---------|----------------|
-| `Api` | Controllers, CORS, OpenAPI, env loading |
-| `Application` | DTOs + `ILocationService` / `LocationAppService` |
+| `Api` | Controllers, `TripHub` (SignalR), CORS, OpenAPI |
+| `Application` | DTOs + location/live-update contracts |
 | `Domain` | `Location` entity + GeoJSON point |
-| `Infrastructure` | MongoDB documents, repository, indexes, seed |
+| `Infrastructure` | MongoDB + in-memory trip presence store |
 
 ## MongoDB document shape
 
@@ -54,6 +54,71 @@ Prefix: `/api` (same style as Tripwalaah Node API)
 | `PUT` | `/api/locations/{id}` | Update |
 | `DELETE` | `/api/locations/{id}` | Soft-delete (deactivate) |
 | `GET` | `/health` | Health check |
+| `GET` | `/api/trips/{tripId}/live/presence` | Connected members snapshot |
+| `POST` | `/api/trips/{tripId}/live/status` | Broadcast trip status via SignalR |
+| `POST` | `/api/trips/{tripId}/live/location` | Broadcast location via SignalR (server proxy) |
+
+## SignalR live trip updates
+
+Hub URL: `http://localhost:5000/hubs/trip`
+
+Use this so users in the same trip get live location + membership updates.
+
+### Hub methods (client → server)
+
+| Method | Payload | Description |
+|--------|---------|-------------|
+| `JoinTrip` | `{ tripId, userId, displayName? }` | Join trip group + receive presence |
+| `LeaveTrip` | `tripId` | Leave trip group |
+| `UpdateLocation` | `{ tripId, latitude, longitude, speedKmh?, heading? }` | Push live GPS to trip members |
+| `GetPresence` | `tripId` | Request current members snapshot |
+
+### Client events (server → client)
+
+| Event | Payload |
+|-------|---------|
+| `MemberJoined` | `{ tripId, userId, displayName, timestamp }` |
+| `MemberLeft` | `{ tripId, userId, displayName, timestamp }` |
+| `LocationUpdated` | `{ tripId, userId, latitude, longitude, speedKmh, heading, timestamp }` |
+| `TripStatusUpdated` | `{ tripId, status, message, triggeredByUserId, timestamp }` |
+| `PresenceSnapshot` | `{ tripId, members[], timestamp }` |
+| `Error` | `{ error }` |
+
+### JS client example
+
+```js
+import * as signalR from "@microsoft/signalr";
+
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("http://localhost:5000/hubs/trip")
+  .withAutomaticReconnect()
+  .build();
+
+connection.on("LocationUpdated", (update) => {
+  console.log("live location", update);
+});
+
+connection.on("MemberJoined", (member) => console.log("joined", member));
+connection.on("MemberLeft", (member) => console.log("left", member));
+connection.on("PresenceSnapshot", (snap) => console.log("presence", snap));
+connection.on("TripStatusUpdated", (status) => console.log("status", status));
+
+await connection.start();
+await connection.invoke("JoinTrip", {
+  tripId: "TRIP_ID",
+  userId: "USER_ID",
+  displayName: "Lav"
+});
+
+// call periodically from device GPS
+await connection.invoke("UpdateLocation", {
+  tripId: "TRIP_ID",
+  latitude: 26.9124,
+  longitude: 75.7873,
+  speedKmh: 42,
+  heading: 180
+});
+```
 
 ### Create example
 
@@ -91,8 +156,9 @@ Important keys:
 | `MONGODB_URI` | Same URI as Tripwalaah Node (`mongodb://localhost:27017/tripwalaah`) |
 | `DB_MAX_POOL_SIZE` / `DB_MIN_POOL_SIZE` | Pool sizing |
 | `DB_CONNECT_TIMEOUT` / `DB_SOCKET_TIMEOUT` | Timeouts (ms) |
-| `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated frontend origins (required for SignalR browser clients) |
 | `API_PREFIX` | `/api` |
+| `SIGNALR_ENABLED` | Feature flag marker (`true` by default in docs) |
 
 Do **not** commit real secrets (Atlas passwords, JWT keys, Twilio, OpenAI, etc.).
 
