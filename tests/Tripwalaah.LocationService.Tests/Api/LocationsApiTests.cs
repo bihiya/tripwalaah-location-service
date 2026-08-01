@@ -3,12 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentAssertions;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using Tripwalaah.LocationService.Application.DTOs;
 using Tripwalaah.LocationService.Application.Interfaces;
 using Tripwalaah.LocationService.Domain.Entities;
@@ -26,23 +23,11 @@ public sealed class LocationsApiTests : IClassFixture<WebApplicationFactory<Prog
 
     public LocationsApiTests(WebApplicationFactory<Program> factory)
     {
-        _client = factory.WithWebHostBuilder(builder =>
+        _client = TestWebApp.CreateClient(factory, services =>
         {
-            builder.UseSetting("PORT", "0");
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<ILocationRepository>();
-                services.AddSingleton<ILocationRepository, FakeLocationRepository>();
-
-                // Avoid Mongo seed during controller tests.
-                var seed = services.FirstOrDefault(d =>
-                    d.ImplementationType?.Name == "LocationSeedHostedService");
-                if (seed is not null)
-                {
-                    services.Remove(seed);
-                }
-            });
-        }).CreateClient();
+            services.RemoveAll<ILocationRepository>();
+            services.AddSingleton<ILocationRepository, FakeLocationRepository>();
+        });
     }
 
     [Fact]
@@ -126,7 +111,6 @@ public sealed class LocationsApiTests : IClassFixture<WebApplicationFactory<Prog
         public Task AddAsync(Location location, CancellationToken cancellationToken = default)
         {
             _counter++;
-            // Valid-looking ObjectId hex length
             location.AssignId($"507f1f77bcf86cd79943{_counter:D4}");
             _locations.Add(location);
             return Task.CompletedTask;

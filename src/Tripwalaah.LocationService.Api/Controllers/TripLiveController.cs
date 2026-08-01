@@ -11,7 +11,8 @@ namespace Tripwalaah.LocationService.Api.Controllers;
 [Route("api/trips/{tripId}/live")]
 public sealed class TripLiveController(
     ITripLiveUpdateService liveUpdateService,
-    ITripPresenceStore presenceStore) : ControllerBase
+    ITripPresenceStore presenceStore,
+    ILiveLocationCache liveLocationCache) : ControllerBase
 {
     /// <summary>Broadcast a trip status change to all connected members.</summary>
     [HttpPost("status")]
@@ -79,7 +80,25 @@ public sealed class TripLiveController(
         CancellationToken cancellationToken)
     {
         var members = await presenceStore.GetMembersAsync(tripId.Trim(), cancellationToken);
-        return Ok(new TripPresenceSnapshotDto(tripId.Trim(), members, DateTime.UtcNow));
+        var cached = await liveLocationCache.GetTripLocationsAsync(tripId.Trim(), cancellationToken);
+        var byUser = cached.ToDictionary(x => x.UserId, StringComparer.Ordinal);
+
+        var enriched = members
+            .Select(m => byUser.TryGetValue(m.UserId, out var location) ? m with { LastLocation = location } : m)
+            .ToList();
+
+        return Ok(new TripPresenceSnapshotDto(tripId.Trim(), enriched, DateTime.UtcNow));
+    }
+
+    /// <summary>Get live locations currently stored in Redis for a trip.</summary>
+    [HttpGet("locations")]
+    [ProducesResponseType(typeof(IReadOnlyList<LiveLocationUpdateDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<LiveLocationUpdateDto>>> GetLiveLocations(
+        string tripId,
+        CancellationToken cancellationToken)
+    {
+        var locations = await liveLocationCache.GetTripLocationsAsync(tripId.Trim(), cancellationToken);
+        return Ok(locations);
     }
 }
 

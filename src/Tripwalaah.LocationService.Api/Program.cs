@@ -32,7 +32,18 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["FRONTEND_URL"] = Environment.GetEnvironmentVariable("FRONTEND_URL"),
     ["SITE_URL"] = Environment.GetEnvironmentVariable("SITE_URL"),
     ["APP_NAME"] = Environment.GetEnvironmentVariable("APP_NAME"),
-    ["SIGNALR_ENABLED"] = Environment.GetEnvironmentVariable("SIGNALR_ENABLED")
+    ["SIGNALR_ENABLED"] = Environment.GetEnvironmentVariable("SIGNALR_ENABLED"),
+    ["REDIS_URL"] = Environment.GetEnvironmentVariable("REDIS_URL"),
+    ["REDIS_ENABLED"] = Environment.GetEnvironmentVariable("REDIS_ENABLED"),
+    ["REDIS_LIVE_LOCATION_TTL_SECONDS"] = Environment.GetEnvironmentVariable("REDIS_LIVE_LOCATION_TTL_SECONDS"),
+    ["KAFKA_ENABLED"] = Environment.GetEnvironmentVariable("KAFKA_ENABLED"),
+    ["KAFKA_BOOTSTRAP_SERVERS"] = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS"),
+    ["KAFKA_BROKERS"] = Environment.GetEnvironmentVariable("KAFKA_BROKERS"),
+    ["KAFKA_ENABLE_CONSUMER"] = Environment.GetEnvironmentVariable("KAFKA_ENABLE_CONSUMER"),
+    ["KAFKA_LIVE_LOCATION_TOPIC"] = Environment.GetEnvironmentVariable("KAFKA_LIVE_LOCATION_TOPIC"),
+    ["KAFKA_TRIP_EVENTS_TOPIC"] = Environment.GetEnvironmentVariable("KAFKA_TRIP_EVENTS_TOPIC"),
+    ["KAFKA_GROUP_ID"] = Environment.GetEnvironmentVariable("KAFKA_GROUP_ID"),
+    ["KAFKA_CLIENT_ID"] = Environment.GetEnvironmentVariable("KAFKA_CLIENT_ID")
 });
 
 // Keep PORT=5000 aligned with Tripwalaah Node API; skip when host URLs are already set (e.g. tests).
@@ -98,7 +109,9 @@ app.MapGet("/", () => Results.Ok(new
     version = "1.0.0",
     status = "running",
     apiPrefix = builder.Configuration["API_PREFIX"] ?? "/api",
-    signalRHub = "/hubs/trip"
+    signalRHub = "/hubs/trip",
+    redis = builder.Configuration["REDIS_URL"] ?? builder.Configuration["Redis:ConnectionString"],
+    kafka = builder.Configuration["KAFKA_BOOTSTRAP_SERVERS"] ?? builder.Configuration["Kafka:BootstrapServers"]
 }));
 
 app.Run();
