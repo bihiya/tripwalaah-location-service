@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Tripwalaah.LocationService.Api/Tripwalaah.LocationService.Api.csproj" />
+    <Project Path="src/Tripwalaah.LocationService.Application/Tripwalaah.LocationService.Application.csproj" />
+    <Project Path="src/Tripwalaah.LocationService.Domain/Tripwalaah.LocationService.Domain.csproj" />
+    <Project Path="src/Tripwalaah.LocationService.Infrastructure/Tripwalaah.LocationService.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tripwalaah.LocationService.Tests/Tripwalaah.LocationService.Tests.csproj" />
+  </Folder>
+</Solution>

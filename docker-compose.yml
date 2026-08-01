@@ -1,0 +1,31 @@
+services:
+  location-api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Database__Provider: PostgreSQL
+      ConnectionStrings__LocationDb: Host=postgres;Port=5432;Database=tripwalaah_locations;Username=postgres;Password=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tripwalaah_locations
+    ports:
+      - "5432:5432"
+    volumes:
+      - location_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tripwalaah_locations"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  location_pgdata:
