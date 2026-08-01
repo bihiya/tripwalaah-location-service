@@ -1,0 +1,13 @@
+**/.git
+**/bin
+**/obj
+**/.vs
+**/TestResults
+**/*.user
+**/*.db
+**/*.db-shm
+**/*.db-wal
+README.md
+.dockerignore
+.git
+.gitignore

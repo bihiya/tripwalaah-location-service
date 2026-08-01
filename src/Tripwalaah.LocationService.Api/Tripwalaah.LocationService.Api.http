@@ -1,0 +1,28 @@
+@host = http://localhost:5000
+
+### Service info
+GET {{host}}/
+
+### Health
+GET {{host}}/health
+
+### Search locations
+GET {{host}}/api/locations?countryCode=IN
+
+### Create location
+POST {{host}}/api/locations
+Content-Type: application/json
+
+{
+  "name": "Udaipur",
+  "city": "Udaipur",
+  "country": "India",
+  "countryCode": "IN",
+  "latitude": 24.5854,
+  "longitude": 73.7125,
+  "type": "City",
+  "state": "Rajasthan",
+  "region": "Rajasthan",
+  "description": "City of Lakes",
+  "timezone": "Asia/Kolkata"
+}
