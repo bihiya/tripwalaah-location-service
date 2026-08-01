@@ -1,10 +1,37 @@
 @host = http://localhost:5000
+@tripId = trip-demo-001
 
 ### Service info
 GET {{host}}/
 
 ### Health
 GET {{host}}/health
+
+### Trip live presence
+GET {{host}}/api/trips/{{tripId}}/live/presence
+
+### Broadcast trip status (SignalR)
+POST {{host}}/api/trips/{{tripId}}/live/status
+Content-Type: application/json
+
+{
+  "status": "started",
+  "message": "Trip is on the way",
+  "triggeredByUserId": "user-1"
+}
+
+### Broadcast live location (SignalR server proxy)
+POST {{host}}/api/trips/{{tripId}}/live/location
+Content-Type: application/json
+
+{
+  "userId": "user-1",
+  "displayName": "Lav",
+  "latitude": 26.9124,
+  "longitude": 75.7873,
+  "speedKmh": 40,
+  "heading": 180
+}
 
 ### Search locations
 GET {{host}}/api/locations?countryCode=IN

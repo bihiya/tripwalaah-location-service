@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Tripwalaah.LocationService.Application.Interfaces;
 using Tripwalaah.LocationService.Infrastructure.Persistence;
+using Tripwalaah.LocationService.Infrastructure.Realtime;
 
 namespace Tripwalaah.LocationService.Infrastructure;
 
@@ -84,6 +85,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<ILocationRepository, LocationMongoRepository>();
+        services.AddSingleton<ITripPresenceStore, InMemoryTripPresenceStore>();
         services.AddHostedService<LocationSeedHostedService>();
 
         services.AddHealthChecks()
