@@ -39,3 +39,11 @@ commands live in `README.md`; only the non-obvious, environment-specific notes a
   an in-memory fake `ILocationRepository`, so they run without any running service.
 - There is no dedicated linter; `dotnet format Tripwalaah.LocationService.slnx --verify-no-changes`
   is used as the formatting/lint gate.
+
+### Realtime (SignalR) feature
+
+- The API exposes a SignalR hub at `/hubs/trip` plus server-side broadcast REST endpoints under
+  `/api/trips/{tripId}/live/*` (documented in `README.md`). There is no browser UI, so to exercise
+  the hub end to end use a SignalR client (e.g. a small `Microsoft.AspNetCore.SignalR.Client` console
+  app): connect, `JoinTrip`, then POST to `/api/trips/{tripId}/live/status` and confirm the client
+  receives the `TripStatusUpdated` event. This path does not require MongoDB (presence is in-memory).
