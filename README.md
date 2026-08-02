@@ -226,9 +226,11 @@ Configure these in the GitHub repo settings before the first push:
 
 | Kind | Name | Example |
 |------|------|---------|
-| Variable | `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` |
+| Variable (or Secret) | `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` |
 | Secret | `ACR_USERNAME` | ACR admin user or service principal appId |
 | Secret | `ACR_PASSWORD` | ACR admin password or service principal secret |
+
+`ACR_LOGIN_SERVER` should be under **Variables** (not Secrets). After setting values, re-run **Build and Push to Azure ACR** from the Actions tab.
 
 Image: `{ACR_LOGIN_SERVER}/tripwalaah-location-service` (tags: `latest`, short SHA, semver when tagged).
 

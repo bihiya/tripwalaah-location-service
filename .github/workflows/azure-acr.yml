@@ -4,9 +4,9 @@ name: Build and Push to Azure ACR
 # Pushes to Azure Container Registry on main and version tags.
 #
 # Required GitHub configuration (Settings → Secrets and variables → Actions):
-#   Variable  ACR_LOGIN_SERVER  e.g. myregistry.azurecr.io
-#   Secret    ACR_USERNAME      ACR admin user or service principal appId
-#   Secret    ACR_PASSWORD      ACR admin password or service principal password/secret
+#   Variable or Secret  ACR_LOGIN_SERVER  e.g. myregistry.azurecr.io
+#   Secret              ACR_USERNAME      ACR admin user or service principal appId
+#   Secret              ACR_PASSWORD      ACR admin password or service principal password/secret
 
 on:
   push:
@@ -32,7 +32,8 @@ jobs:
       - name: Resolve registry
         id: registry
         env:
-          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          # Prefer Variables tab; fall back to Secrets if stored there by mistake.
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER || secrets.ACR_LOGIN_SERVER }}
         run: |
           if [ -n "$ACR_LOGIN_SERVER" ]; then
             echo "login_server=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
@@ -40,7 +41,7 @@ jobs:
             # PR builds only need a placeholder image name (push is disabled).
             echo "login_server=acr.example.azurecr.io" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Repository variable ACR_LOGIN_SERVER is required to push images."
+            echo "::error::Set ACR_LOGIN_SERVER as a repository Variable (or Secret), e.g. myregistry.azurecr.io"
             exit 1
           fi
 
