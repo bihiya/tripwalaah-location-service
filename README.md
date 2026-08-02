@@ -283,7 +283,9 @@ This adds an Entra federated credential for:
 
 Defaults (override with repo variables if needed): ACR `tripalaahacr.azurecr.io`, RG `tripwalaah-location-microservice`, app `location-service`.
 
-3. Run **Deploy to Azure Container Apps** (workflow_dispatch), or push to `main` after an ACR build succeeds.
+3. In Azure Portal, turn off **Container Apps → Continuous deployment / GitHub Actions** for this app if it keeps re-adding `*-AutoDeployTrigger-*.yml` files. This repo’s deploy workflow is `.github/workflows/azure-container-apps.yml`.
+
+4. Run **Deploy to Azure Container Apps** (workflow_dispatch), or push to `main` after an ACR build succeeds.
 
 #### Verify in Azure Portal
 
