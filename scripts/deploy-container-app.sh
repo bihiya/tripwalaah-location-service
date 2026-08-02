@@ -13,11 +13,11 @@
 
 set -euo pipefail
 
-ACR_NAME="${ACR_NAME:?Set ACR_NAME (short name, no .azurecr.io)}"
-RESOURCE_GROUP="${RESOURCE_GROUP:?Set RESOURCE_GROUP}"
+ACR_NAME="${ACR_NAME:-tripalaahacr}"
+RESOURCE_GROUP="${RESOURCE_GROUP:-tripwalaah-location-microservice}"
 LOCATION="${LOCATION:-eastus}"
 ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-tripwalaah-env}"
-APP_NAME="${APP_NAME:-tripwalaah-location}"
+APP_NAME="${APP_NAME:-location-service}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 MONGODB_URI="${MONGODB_URI:?Set MONGODB_URI (Atlas or Azure Cosmos Mongo connection string)}"
 
