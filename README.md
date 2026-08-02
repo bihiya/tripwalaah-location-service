@@ -235,6 +235,47 @@ After setting values, re-run **Build and Push to Azure ACR** from the Actions ta
 
 Image: `{ACR_LOGIN_SERVER}/tripwalaah-location-service` (tags: `latest`, short SHA, semver when tagged).
 
+### Deploy (pay-as-you-go)
+
+Use **Azure Container Apps Consumption** — scales to **0** when idle, so you pay mainly for request time.
+
+Cheapest first deploy: image from ACR + your existing MongoDB (e.g. Atlas). Redis/Kafka stay **off** (`REDIS_ENABLED=false`, `KAFKA_ENABLED=false`).
+
+#### Option A — one command (local Azure CLI)
+
+```bash
+az login
+export ACR_NAME=myregistry          # short name (before .azurecr.io)
+export RESOURCE_GROUP=tripwalaah-rg
+export LOCATION=eastus
+export MONGODB_URI='mongodb+srv://USER:PASS@cluster/tripwalaah'
+./scripts/deploy-container-app.sh
+```
+
+Then open the printed `https://…/health` URL.
+
+#### Option B — GitHub Actions
+
+1. Create an Entra app / service principal with federated credential for this repo, and grant it **Contributor** on the resource group (plus **AcrPull** on the registry if not using admin creds).
+2. On Environment **production**, add:
+
+| Kind | Name | Example |
+|------|------|---------|
+| Variable | `AZURE_RESOURCE_GROUP` | `tripwalaah-rg` |
+| Variable | `AZURE_CONTAINER_APP_NAME` | `tripwalaah-location` |
+| Variable | `AZURE_CONTAINER_APP_ENVIRONMENT` | `tripwalaah-env` |
+| Variable | `AZURE_LOCATION` | `eastus` |
+| Secret | `AZURE_CLIENT_ID` | app/SP client id |
+| Secret | `AZURE_TENANT_ID` | directory (tenant) id |
+| Secret | `AZURE_SUBSCRIPTION_ID` | subscription id |
+| Secret | `MONGODB_URI` | Mongo connection string |
+
+3. Run **Deploy to Azure Container Apps** (workflow_dispatch), or push to `main` after an ACR build succeeds.
+
+#### Verify in Azure Portal
+
+**Container Apps** → `tripwalaah-location` → **Application Url** → open `/health`.
+
 ## Tests
 
 ```bash
