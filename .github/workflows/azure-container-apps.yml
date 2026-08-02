@@ -3,17 +3,27 @@ name: Deploy to Azure Container Apps
 # Deploys the ACR image to Azure Container Apps (Consumption / scale-to-zero).
 # Runs after a successful ACR push on main, or manually via workflow_dispatch.
 #
-# Required on GitHub Environment "production":
-#   Variables:
-#     ACR_LOGIN_SERVER                 e.g. myregistry.azurecr.io
-#     AZURE_RESOURCE_GROUP             e.g. tripwalaah-rg
-#     AZURE_CONTAINER_APP_NAME         e.g. tripwalaah-location
-#     AZURE_CONTAINER_APP_ENVIRONMENT  e.g. tripwalaah-env
-#     AZURE_LOCATION                   e.g. eastus
-#   Secrets:
-#     AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID  (OIDC)
-#     ACR_USERNAME / ACR_PASSWORD
-#     MONGODB_URI
+# Uses Azure Portal continuous-deploy secrets when present (LOCATIONSERVICE_*),
+# with fallbacks to AZURE_*/ACR_* names.
+#
+# Required secrets (repository secrets from Azure Portal, or Environment production):
+#   LOCATIONSERVICE_AZURE_CLIENT_ID / AZURE_CLIENT_ID
+#   LOCATIONSERVICE_AZURE_TENANT_ID / AZURE_TENANT_ID
+#   LOCATIONSERVICE_AZURE_SUBSCRIPTION_ID / AZURE_SUBSCRIPTION_ID
+#   LOCATIONSERVICE_REGISTRY_USERNAME / ACR_USERNAME
+#   LOCATIONSERVICE_REGISTRY_PASSWORD / ACR_PASSWORD
+#   MONGODB_URI (only required for first-time app create)
+#
+# Optional repository variables (defaults match Azure Portal auto-deploy):
+#   ACR_LOGIN_SERVER                 default: tripalaahacr.azurecr.io
+#   AZURE_RESOURCE_GROUP             default: tripwalaah-location-microservice
+#   AZURE_CONTAINER_APP_NAME         default: location-service
+#   AZURE_CONTAINER_APP_ENVIRONMENT  default: tripwalaah-env
+#   AZURE_LOCATION                   default: eastus
+#
+# Entra federated credential subject MUST match GitHub's immutable OIDC sub:
+#   repo:bihiya@55905431/tripwalaah-location-service@1319416454:ref:refs/heads/main
+# One-time fix: ./scripts/fix-oidc-federated-credential.sh
 
 on:
   workflow_run:
@@ -37,41 +47,55 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    environment: production
+    # No GitHub Environment on purpose: OIDC subject must stay
+    # repo:...:ref:refs/heads/main (matches Azure Portal FIC + fix script).
+
+    env:
+      AZURE_CLIENT_ID: ${{ secrets.LOCATIONSERVICE_AZURE_CLIENT_ID || secrets.AZURE_CLIENT_ID || secrets.TRIPWALAAHLOCATION_AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.LOCATIONSERVICE_AZURE_TENANT_ID || secrets.AZURE_TENANT_ID || secrets.TRIPWALAAHLOCATION_AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.LOCATIONSERVICE_AZURE_SUBSCRIPTION_ID || secrets.AZURE_SUBSCRIPTION_ID || secrets.TRIPWALAAHLOCATION_AZURE_SUBSCRIPTION_ID }}
+      ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER || secrets.ACR_LOGIN_SERVER || 'tripalaahacr.azurecr.io' }}
+      ACR_USERNAME: ${{ secrets.LOCATIONSERVICE_REGISTRY_USERNAME || secrets.ACR_USERNAME || secrets.TRIPWALAAHLOCATION_REGISTRY_USERNAME }}
+      ACR_PASSWORD: ${{ secrets.LOCATIONSERVICE_REGISTRY_PASSWORD || secrets.ACR_PASSWORD || secrets.TRIPWALAAHLOCATION_REGISTRY_PASSWORD }}
+      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'tripwalaah-location-microservice' }}
+      LOCATION: ${{ vars.AZURE_LOCATION || 'eastus' }}
+      ENVIRONMENT_NAME: ${{ vars.AZURE_CONTAINER_APP_ENVIRONMENT || 'tripwalaah-env' }}
+      APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME || 'location-service' }}
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || 'latest' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Deploy Container App
-        env:
-          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER || secrets.ACR_LOGIN_SERVER }}
-          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
-          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-          LOCATION: ${{ vars.AZURE_LOCATION }}
-          ENVIRONMENT_NAME: ${{ vars.AZURE_CONTAINER_APP_ENVIRONMENT }}
-          APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || 'latest' }}
+      - name: Validate config
         run: |
           set -euo pipefail
-
-          for required in ACR_LOGIN_SERVER ACR_USERNAME ACR_PASSWORD RESOURCE_GROUP LOCATION ENVIRONMENT_NAME APP_NAME MONGODB_URI; do
+          for required in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID ACR_LOGIN_SERVER ACR_USERNAME ACR_PASSWORD RESOURCE_GROUP LOCATION ENVIRONMENT_NAME APP_NAME; do
             if [ -z "${!required}" ]; then
-              echo "::error::Missing required production env config: ${required}"
+              echo "::error::Missing required config: ${required}. Set LOCATIONSERVICE_* repo secrets (Azure Portal) or AZURE_*/ACR_* secrets."
               exit 1
             fi
           done
+          echo "Deploy target: ${APP_NAME} in ${RESOURCE_GROUP} <- ${ACR_LOGIN_SERVER}/tripwalaah-location-service:${IMAGE_TAG}"
 
-          ACR_NAME="${ACR_LOGIN_SERVER%%.*}"
+      - name: OIDC subject hint
+        run: |
+          echo "GitHub will present immutable OIDC subject:"
+          echo "  repo:bihiya@55905431/tripwalaah-location-service@1319416454:ref:refs/heads/main"
+          echo "If login fails with AADSTS700213, run ./scripts/fix-oidc-federated-credential.sh"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.LOCATIONSERVICE_AZURE_CLIENT_ID || secrets.AZURE_CLIENT_ID || secrets.TRIPWALAAHLOCATION_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.LOCATIONSERVICE_AZURE_TENANT_ID || secrets.AZURE_TENANT_ID || secrets.TRIPWALAAHLOCATION_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.LOCATIONSERVICE_AZURE_SUBSCRIPTION_ID || secrets.AZURE_SUBSCRIPTION_ID || secrets.TRIPWALAAHLOCATION_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Container App
+        run: |
+          set -euo pipefail
+
           IMAGE="${ACR_LOGIN_SERVER}/tripwalaah-location-service:${IMAGE_TAG}"
 
           echo "Ensuring resource group..."
@@ -87,11 +111,13 @@ jobs:
           fi
 
           if az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-            az containerapp secret set \
-              --name "$APP_NAME" \
-              --resource-group "$RESOURCE_GROUP" \
-              --secrets "mongodb-uri=${MONGODB_URI}" \
-              --output none
+            if [ -n "${MONGODB_URI}" ]; then
+              az containerapp secret set \
+                --name "$APP_NAME" \
+                --resource-group "$RESOURCE_GROUP" \
+                --secrets "mongodb-uri=${MONGODB_URI}" \
+                --output none
+            fi
 
             az containerapp registry set \
               --name "$APP_NAME" \
@@ -101,6 +127,18 @@ jobs:
               --password "$ACR_PASSWORD" \
               --output none
 
+            ENV_VARS=(
+              "ASPNETCORE_ENVIRONMENT=Production"
+              "PORT=5000"
+              "API_PREFIX=/api"
+              "REDIS_ENABLED=false"
+              "KAFKA_ENABLED=false"
+              "SIGNALR_ENABLED=true"
+            )
+            if [ -n "${MONGODB_URI}" ]; then
+              ENV_VARS+=("MONGODB_URI=secretref:mongodb-uri")
+            fi
+
             az containerapp update \
               --name "$APP_NAME" \
               --resource-group "$RESOURCE_GROUP" \
@@ -109,16 +147,14 @@ jobs:
               --memory 0.5Gi \
               --min-replicas 0 \
               --max-replicas 3 \
-              --set-env-vars \
-                "ASPNETCORE_ENVIRONMENT=Production" \
-                "PORT=5000" \
-                "API_PREFIX=/api" \
-                "REDIS_ENABLED=false" \
-                "KAFKA_ENABLED=false" \
-                "SIGNALR_ENABLED=true" \
-                "MONGODB_URI=secretref:mongodb-uri" \
+              --set-env-vars "${ENV_VARS[@]}" \
               --output none
           else
+            if [ -z "${MONGODB_URI}" ]; then
+              echo "::error::MONGODB_URI secret is required for first-time Container App create."
+              exit 1
+            fi
+
             az containerapp create \
               --name "$APP_NAME" \
               --resource-group "$RESOURCE_GROUP" \

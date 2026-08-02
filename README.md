@@ -256,21 +256,36 @@ Then open the printed `https://…/health` URL.
 
 #### Option B — GitHub Actions
 
-1. Create an Entra app / service principal with federated credential for this repo, and grant it **Contributor** on the resource group (plus **AcrPull** on the registry if not using admin creds).
-2. On Environment **production**, add:
+ACR push already works via Environment **production** (`ACR_*`). Container Apps deploy uses the Azure Portal continuous-deploy repo secrets (`LOCATIONSERVICE_*`) when present.
 
-| Kind | Name | Example |
-|------|------|---------|
-| Variable | `AZURE_RESOURCE_GROUP` | `tripwalaah-rg` |
-| Variable | `AZURE_CONTAINER_APP_NAME` | `tripwalaah-location` |
-| Variable | `AZURE_CONTAINER_APP_ENVIRONMENT` | `tripwalaah-env` |
-| Variable | `AZURE_LOCATION` | `eastus` |
-| Secret | `AZURE_CLIENT_ID` | app/SP client id |
-| Secret | `AZURE_TENANT_ID` | directory (tenant) id |
-| Secret | `AZURE_SUBSCRIPTION_ID` | subscription id |
-| Secret | `MONGODB_URI` | Mongo connection string |
+1. **One-time OIDC fix** (required for repos created after 2026-07-15 — immutable GitHub subject):
 
-3. Run **Deploy to Azure Container Apps** (workflow_dispatch), or push to `main` after an ACR build succeeds.
+```bash
+az login
+# Optional if auto-discover fails:
+# export APP_ID=<value of LOCATIONSERVICE_AZURE_CLIENT_ID>
+./scripts/fix-oidc-federated-credential.sh
+```
+
+This adds an Entra federated credential for:
+`repo:bihiya@55905431/tripwalaah-location-service@1319416454:ref:refs/heads/main`
+
+2. Ensure repo secrets exist (Azure Portal usually created these):
+
+| Secret | Notes |
+|--------|--------|
+| `LOCATIONSERVICE_AZURE_CLIENT_ID` | Or `AZURE_CLIENT_ID` |
+| `LOCATIONSERVICE_AZURE_TENANT_ID` | Or `AZURE_TENANT_ID` |
+| `LOCATIONSERVICE_AZURE_SUBSCRIPTION_ID` | Or `AZURE_SUBSCRIPTION_ID` |
+| `LOCATIONSERVICE_REGISTRY_USERNAME` | Or `ACR_USERNAME` |
+| `LOCATIONSERVICE_REGISTRY_PASSWORD` | Or `ACR_PASSWORD` |
+| `MONGODB_URI` | Only required for first-time app create |
+
+Defaults (override with repo variables if needed): ACR `tripalaahacr.azurecr.io`, RG `tripwalaah-location-microservice`, app `location-service`.
+
+3. In Azure Portal, turn off **Container Apps → Continuous deployment / GitHub Actions** for this app if it keeps re-adding `*-AutoDeployTrigger-*.yml` files. This repo’s deploy workflow is `.github/workflows/azure-container-apps.yml`.
+
+4. Run **Deploy to Azure Container Apps** (workflow_dispatch), or push to `main` after an ACR build succeeds.
 
 #### Verify in Azure Portal
 
