@@ -3,10 +3,11 @@ name: Build and Push to Azure ACR
 # Builds the location-service image on PRs (no push).
 # Pushes to Azure Container Registry on main and version tags.
 #
-# Required GitHub configuration (Settings → Secrets and variables → Actions):
-#   Variable or Secret  ACR_LOGIN_SERVER  e.g. myregistry.azurecr.io
-#   Secret              ACR_USERNAME      ACR admin user or service principal appId
-#   Secret              ACR_PASSWORD      ACR admin password or service principal password/secret
+# Credentials live in the GitHub Environment named "production":
+#   Settings → Environments → production → Environment variables / secrets
+#     Variable or Secret  ACR_LOGIN_SERVER  e.g. myregistry.azurecr.io
+#     Secret              ACR_USERNAME      ACR admin user or SP appId
+#     Secret              ACR_PASSWORD      ACR admin password or SP secret
 
 on:
   push:
@@ -22,6 +23,8 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # Required so vars/secrets added under Environments → production are visible.
+    environment: production
     permissions:
       contents: read
 
@@ -32,16 +35,14 @@ jobs:
       - name: Resolve registry
         id: registry
         env:
-          # Prefer Variables tab; fall back to Secrets if stored there by mistake.
           ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER || secrets.ACR_LOGIN_SERVER }}
         run: |
           if [ -n "$ACR_LOGIN_SERVER" ]; then
             echo "login_server=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            # PR builds only need a placeholder image name (push is disabled).
             echo "login_server=acr.example.azurecr.io" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Set ACR_LOGIN_SERVER as a repository Variable (or Secret), e.g. myregistry.azurecr.io"
+            echo "::error::Set ACR_LOGIN_SERVER on the 'production' environment (Settings → Environments → production)."
             exit 1
           fi
 
