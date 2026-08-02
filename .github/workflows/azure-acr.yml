@@ -1,0 +1,81 @@
+name: Build and Push to Azure ACR
+
+# Builds the location-service image on PRs (no push).
+# Pushes to Azure Container Registry on main and version tags.
+#
+# Required GitHub configuration (Settings → Secrets and variables → Actions):
+#   Variable  ACR_LOGIN_SERVER  e.g. myregistry.azurecr.io
+#   Secret    ACR_USERNAME      ACR admin user or service principal appId
+#   Secret    ACR_PASSWORD      ACR admin password or service principal password/secret
+
+on:
+  push:
+    branches: ['main']
+    tags: ['v*.*.*']
+  pull_request:
+    branches: ['main']
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: tripwalaah-location-service
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve registry
+        id: registry
+        env:
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+        run: |
+          if [ -n "$ACR_LOGIN_SERVER" ]; then
+            echo "login_server=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # PR builds only need a placeholder image name (push is disabled).
+            echo "login_server=acr.example.azurecr.io" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Repository variable ACR_LOGIN_SERVER is required to push images."
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Azure Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.registry.outputs.login_server }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.registry.outputs.login_server }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
