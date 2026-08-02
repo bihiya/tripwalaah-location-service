@@ -222,7 +222,8 @@ docker compose up --build
 
 GitHub Actions workflow [`.github/workflows/azure-acr.yml`](.github/workflows/azure-acr.yml) builds the image on every PR and pushes to Azure ACR on `main` / `v*.*.*` tags.
 
-Configure these in the GitHub repo settings before the first push:
+Configure these on the GitHub **Environment** named `production`
+(**Settings → Environments → production**), not only under repository Actions secrets:
 
 | Kind | Name | Example |
 |------|------|---------|
@@ -230,7 +231,7 @@ Configure these in the GitHub repo settings before the first push:
 | Secret | `ACR_USERNAME` | ACR admin user or service principal appId |
 | Secret | `ACR_PASSWORD` | ACR admin password or service principal secret |
 
-`ACR_LOGIN_SERVER` should be under **Variables** (not Secrets). After setting values, re-run **Build and Push to Azure ACR** from the Actions tab.
+After setting values, re-run **Build and Push to Azure ACR** from the Actions tab.
 
 Image: `{ACR_LOGIN_SERVER}/tripwalaah-location-service` (tags: `latest`, short SHA, semver when tagged).
 
