@@ -1,7 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY Tripwalaah.LocationService.slnx ./
 COPY Directory.Build.props ./
 COPY global.json ./
 COPY src/Tripwalaah.LocationService.Domain/Tripwalaah.LocationService.Domain.csproj src/Tripwalaah.LocationService.Domain/
@@ -9,7 +8,7 @@ COPY src/Tripwalaah.LocationService.Application/Tripwalaah.LocationService.Appli
 COPY src/Tripwalaah.LocationService.Infrastructure/Tripwalaah.LocationService.Infrastructure.csproj src/Tripwalaah.LocationService.Infrastructure/
 COPY src/Tripwalaah.LocationService.Api/Tripwalaah.LocationService.Api.csproj src/Tripwalaah.LocationService.Api/
 
-RUN dotnet restore Tripwalaah.LocationService.slnx
+RUN dotnet restore src/Tripwalaah.LocationService.Api/Tripwalaah.LocationService.Api.csproj
 
 COPY src/ src/
 RUN dotnet publish src/Tripwalaah.LocationService.Api/Tripwalaah.LocationService.Api.csproj \

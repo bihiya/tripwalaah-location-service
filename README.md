@@ -218,6 +218,20 @@ docker compose up --build
 # Kafka: localhost:9092
 ```
 
+### Azure Container Registry (CI)
+
+GitHub Actions workflow [`.github/workflows/azure-acr.yml`](.github/workflows/azure-acr.yml) builds the image on every PR and pushes to Azure ACR on `main` / `v*.*.*` tags.
+
+Configure these in the GitHub repo settings before the first push:
+
+| Kind | Name | Example |
+|------|------|---------|
+| Variable | `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` |
+| Secret | `ACR_USERNAME` | ACR admin user or service principal appId |
+| Secret | `ACR_PASSWORD` | ACR admin password or service principal secret |
+
+Image: `{ACR_LOGIN_SERVER}/tripwalaah-location-service` (tags: `latest`, short SHA, semver when tagged).
+
 ## Tests
 
 ```bash
