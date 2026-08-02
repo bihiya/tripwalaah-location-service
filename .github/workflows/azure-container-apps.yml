@@ -1,0 +1,153 @@
+name: Deploy to Azure Container Apps
+
+# Deploys the ACR image to Azure Container Apps (Consumption / scale-to-zero).
+# Runs after a successful ACR push on main, or manually via workflow_dispatch.
+#
+# Required on GitHub Environment "production":
+#   Variables:
+#     ACR_LOGIN_SERVER                 e.g. myregistry.azurecr.io
+#     AZURE_RESOURCE_GROUP             e.g. tripwalaah-rg
+#     AZURE_CONTAINER_APP_NAME         e.g. tripwalaah-location
+#     AZURE_CONTAINER_APP_ENVIRONMENT  e.g. tripwalaah-env
+#     AZURE_LOCATION                   e.g. eastus
+#   Secrets:
+#     AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID  (OIDC)
+#     ACR_USERNAME / ACR_PASSWORD
+#     MONGODB_URI
+
+on:
+  workflow_run:
+    workflows: ['Build and Push to Azure ACR']
+    types: [completed]
+    branches: ['main']
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Container App
+        env:
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER || secrets.ACR_LOGIN_SERVER }}
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          LOCATION: ${{ vars.AZURE_LOCATION }}
+          ENVIRONMENT_NAME: ${{ vars.AZURE_CONTAINER_APP_ENVIRONMENT }}
+          APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || 'latest' }}
+        run: |
+          set -euo pipefail
+
+          for required in ACR_LOGIN_SERVER ACR_USERNAME ACR_PASSWORD RESOURCE_GROUP LOCATION ENVIRONMENT_NAME APP_NAME MONGODB_URI; do
+            if [ -z "${!required}" ]; then
+              echo "::error::Missing required production env config: ${required}"
+              exit 1
+            fi
+          done
+
+          ACR_NAME="${ACR_LOGIN_SERVER%%.*}"
+          IMAGE="${ACR_LOGIN_SERVER}/tripwalaah-location-service:${IMAGE_TAG}"
+
+          echo "Ensuring resource group..."
+          az group create --name "$RESOURCE_GROUP" --location "$LOCATION" --output none
+
+          echo "Ensuring Container Apps environment (Consumption)..."
+          if ! az containerapp env show --name "$ENVIRONMENT_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+            az containerapp env create \
+              --name "$ENVIRONMENT_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --location "$LOCATION" \
+              --output none
+          fi
+
+          if az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+            az containerapp secret set \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --secrets "mongodb-uri=${MONGODB_URI}" \
+              --output none
+
+            az containerapp registry set \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --server "$ACR_LOGIN_SERVER" \
+              --username "$ACR_USERNAME" \
+              --password "$ACR_PASSWORD" \
+              --output none
+
+            az containerapp update \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --image "$IMAGE" \
+              --cpu 0.25 \
+              --memory 0.5Gi \
+              --min-replicas 0 \
+              --max-replicas 3 \
+              --set-env-vars \
+                "ASPNETCORE_ENVIRONMENT=Production" \
+                "PORT=5000" \
+                "API_PREFIX=/api" \
+                "REDIS_ENABLED=false" \
+                "KAFKA_ENABLED=false" \
+                "SIGNALR_ENABLED=true" \
+                "MONGODB_URI=secretref:mongodb-uri" \
+              --output none
+          else
+            az containerapp create \
+              --name "$APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --environment "$ENVIRONMENT_NAME" \
+              --image "$IMAGE" \
+              --target-port 5000 \
+              --ingress external \
+              --registry-server "$ACR_LOGIN_SERVER" \
+              --registry-username "$ACR_USERNAME" \
+              --registry-password "$ACR_PASSWORD" \
+              --cpu 0.25 \
+              --memory 0.5Gi \
+              --min-replicas 0 \
+              --max-replicas 3 \
+              --secrets "mongodb-uri=${MONGODB_URI}" \
+              --env-vars \
+                "ASPNETCORE_ENVIRONMENT=Production" \
+                "PORT=5000" \
+                "API_PREFIX=/api" \
+                "REDIS_ENABLED=false" \
+                "KAFKA_ENABLED=false" \
+                "SIGNALR_ENABLED=true" \
+                "MONGODB_URI=secretref:mongodb-uri" \
+              --output none
+          fi
+
+          FQDN="$(az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)"
+          echo "### Deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: \`${IMAGE}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: https://${FQDN}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Health: https://${FQDN}/health" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed: https://${FQDN}"
